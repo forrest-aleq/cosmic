@@ -1,0 +1,49 @@
+Below is a streamlined list containing just the rules:
+
+⸻
+
+Data Integrity and Code Quality Guidelines
+	1.	Enforce Strict Input Validation
+Rule: Validate all incoming data against a strict schema before persisting or processing.
+	2.	Use Immutable, Auditable Data Structures
+Rule: Once a record is saved, do not overwrite or delete it without creating an audit trail.
+	3.	Maintain Idempotency for Data Imports
+Rule: Ensure that repeatedly processing the same dataset or webhook event does not create duplicate entries or inconsistencies.
+	4.	Implement Rigorous Error Handling and Logging
+Rule: Log all exceptions and errors with sufficient detail.
+	5.	Use a Robust Testing Strategy
+Rule: Every piece of functionality must have automated tests (unit, integration, and end-to-end).
+	6.	Enforce Code Reviews and Style Checks
+Rule: All merges into your main branch must go through peer review and automated linting checks.
+	7.	Keep Schemas Versioned and Migratable
+Rule: Use a version-controlled schema for any structural changes to your data storage.
+	8.	Ensure Idempotent Retries and Paging for External APIs
+Rule: When calling external APIs, handle pagination carefully and retry idempotently.
+	9.	Maintain a Clear Separation of Concerns
+Rule: Keep your business logic, data transformation, and data persistence layers distinct.
+	10.	Write Unit Tests for Each Function
+Rule: Ensure each function has at least one unit test covering typical usage, edge cases, and error conditions.
+
+⸻
+
+Coding Style and Function Guidelines
+	1.	Limit Function Length
+Rule: Each function should generally be no longer than 30–50 lines of code (excluding docstrings and comments).
+	2.	Single Responsibility per Function
+Rule: Each function should handle exactly one core task or concept.
+	3.	Keep Cyclomatic Complexity Low
+Rule: Limit the number of conditional branches (if-else, switch cases) within a single function.
+	4.	Use Clear, Descriptive Names
+Rule: Functions, variables, and classes should be named descriptively to convey their purpose.
+	5.	Keep Parameter Lists Short
+Rule: Limit function parameters to 3–5 at most.
+	6.	Use Early Returns to Reduce Nesting
+Rule: Return early from a function when preconditions fail, rather than nesting multiple if-else statements.
+	7.	Keep Side Effects Clear
+Rule: A function that changes external state should make that clear in its name or docstring.
+	8.	Ensure Each Function Has a Clear Contract
+Rule: Document or strongly type the inputs and outputs of every function.
+	9.	Refactor Common Logic into Reusable Functions
+Rule: Avoid duplicating code; refactor common logic into utility functions.
+	10.	Write Unit Tests for Each Function
+Rule: Ensure each function has at least one unit test that covers its typical usage, edge cases, and error conditions.
