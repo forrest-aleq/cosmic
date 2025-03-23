@@ -1,25 +1,72 @@
 "use client"
 
 import { useState } from "react"
-import { FileJson, FileSpreadsheet, Info } from "lucide-react"
+import { FileJson, FileSpreadsheet, DownloadCloud, Info } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CompanyProfile } from "@/components/company-profile"
-import { TransactionTable } from "@/components/transaction-table"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { TransactionTable } from "@/components/transaction-table"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+
+import { Account, Transaction, PlaidTransactionsResponse } from "@/types/plaid-types"
 
 interface GeneratedDataProps {
-  data: any
+  data: PlaidTransactionsResponse
 }
 
 export function GeneratedData({ data }: GeneratedDataProps) {
-  const [activeTab, setActiveTab] = useState("profile")
+  const [activeTab, setActiveTab] = useState("summary")
 
+  if (!data) {
+    return (
+      <Alert variant="destructive">
+        <Info className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>No data available. Please generate data first.</AlertDescription>
+      </Alert>
+    )
+  }
+
+  // Get account names for display purposes
+  const accountNames: Record<string, string> = {}
+  data.accounts.forEach((account) => {
+    accountNames[account.account_id] = account.name
+  })
+
+  // Count all transactions
+  const transactionCount = data.added.length + data.modified.length
+
+  // Calculate totals
+  const depositoryAccounts = data.accounts.filter((account) => account.type === "depository")
+  const creditAccounts = data.accounts.filter((account) => account.type === "credit")
+  
+  const depositoryBalance = depositoryAccounts.reduce(
+    (total, account) => total + account.balances.current,
+    0
+  )
+  
+  const creditBalance = creditAccounts.reduce(
+    (total, account) => total + account.balances.current,
+    0
+  )
+
+  // Group transactions by account
+  const transactionsByAccount: Record<string, Transaction[]> = {}
+  
+  data.added.concat(data.modified).forEach((transaction) => {
+    if (!transactionsByAccount[transaction.account_id]) {
+      transactionsByAccount[transaction.account_id] = []
+    }
+    transactionsByAccount[transaction.account_id].push(transaction)
+  })
+
+  // Helper function to download data as JSON
   const downloadJson = (data: any, filename: string) => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+    const json = JSON.stringify(data, null, 2)
+    const blob = new Blob([json], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
@@ -30,31 +77,25 @@ export function GeneratedData({ data }: GeneratedDataProps) {
     URL.revokeObjectURL(url)
   }
 
-  const downloadCsv = (data: any[], filename: string) => {
-    if (!data.length) return
-
-    // Get headers from first object
-    const headers = Object.keys(data[0])
-
-    // Convert data to CSV
-    const csvRows = [
-      headers.join(","), // Header row
-      ...data.map((row) =>
-        headers
-          .map((header) => {
-            // Handle values that need quotes (commas, quotes, etc.)
-            const value = row[header]
-            const valueStr = String(value)
-            return valueStr.includes(",") || valueStr.includes('"') || valueStr.includes("\n")
-              ? `"${valueStr.replace(/"/g, '""')}"`
-              : valueStr
-          })
-          .join(","),
-      ),
-    ]
-
-    const csvString = csvRows.join("\n")
-    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" })
+  // Helper function to download data as CSV
+  const downloadCsv = (transactions: Transaction[], filename: string) => {
+    // Convert transactions to CSV format
+    const headers = ["Date", "Description", "Amount", "Category", "Payment Method"]
+    
+    const rows = transactions.map((t) => [
+      t.date,
+      t.name,
+      t.amount.toString(),
+      t.category ? t.category[t.category.length - 1] : "",
+      t.payment_meta?.payment_method || ""
+    ])
+    
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))
+    ].join("\n")
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
@@ -64,210 +105,198 @@ export function GeneratedData({ data }: GeneratedDataProps) {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
-
-  // Calculate total transaction counts
-  const getTotalTransactions = (statements: Record<string, any[]>) => {
-    return Object.values(statements).reduce((total, transactions) => total + transactions.length, 0)
-  }
-
-  const bankTransactionCount = getTotalTransactions(data.bank_statements)
-  const creditTransactionCount = getTotalTransactions(data.credit_statements)
-  const totalTransactionCount = bankTransactionCount + creditTransactionCount
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Generated Data</h2>
-          <p className="text-muted-foreground">
-            {totalTransactionCount.toLocaleString()} total transactions across{" "}
-            {Object.keys(data.bank_statements).length} bank accounts and {Object.keys(data.credit_statements).length}{" "}
-            credit cards
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => downloadJson(data, "company_data.json")}>
-            <FileJson className="mr-2 h-4 w-4" />
-            Download All (JSON)
-          </Button>
-        </div>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold tracking-tight">Generated Financial Data</h2>
+        <Button variant="outline" onClick={() => downloadJson(data, "financial_data.json")}>
+          <DownloadCloud className="mr-2 h-4 w-4" />
+          Download All Data
+        </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs defaultValue="summary" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="profile">Company Profile</TabsTrigger>
-          <TabsTrigger value="bank">
-            Bank Statements
-            <Badge variant="secondary" className="ml-2">
-              {bankTransactionCount.toLocaleString()}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="credit">
-            Credit Card Statements
-            <Badge variant="secondary" className="ml-2">
-              {creditTransactionCount.toLocaleString()}
-            </Badge>
-          </TabsTrigger>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="accounts">All Accounts</TabsTrigger>
+          <TabsTrigger value="transactions">All Transactions</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile">
-          <div className="grid gap-4 md:grid-cols-2">
-            <CompanyProfile profile={data.profile} />
-
+        <TabsContent value="summary">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
-              <CardHeader>
-                <CardTitle>Download Options</CardTitle>
-                <CardDescription>Export your company profile data</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Accounts</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => downloadJson(data.profile, "company_profile.json")}
-                >
-                  <FileJson className="mr-2 h-4 w-4" />
-                  Download Profile (JSON)
-                </Button>
-
-                <div className="rounded-md bg-muted p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Info className="h-4 w-4" />
-                    <h3 className="font-medium">Data Summary</h3>
+              <CardContent>
+                <div className="text-2xl font-bold">{data.accounts.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  {depositoryAccounts.length} bank accounts, {creditAccounts.length} credit cards
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{transactionCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {data.added.length} added, {data.modified.length} modified
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Account Balances</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium">Bank:</span>{" "}
+                    <span className="text-lg font-bold">
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                      }).format(depositoryBalance)}
+                    </span>
                   </div>
-                  <ul className="space-y-1 text-sm">
-                    <li>Company: {data.profile.company_name}</li>
-                    <li>Bank Accounts: {Object.keys(data.bank_statements).length}</li>
-                    <li>Credit Cards: {Object.keys(data.credit_statements).length}</li>
-                    <li>Total Transactions: {totalTransactionCount.toLocaleString()}</li>
-                    <li>Date Range: 2 years of transaction history</li>
-                    <li>Generated: {new Date().toLocaleString()}</li>
-                  </ul>
+                  <div>
+                    <span className="text-sm font-medium">Credit:</span>{" "}
+                    <span className="text-lg font-bold text-red-500">
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                      }).format(creditBalance)}
+                    </span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="bank">
+        <TabsContent value="accounts">
           <Card>
             <CardHeader>
-              <CardTitle>Bank Statements</CardTitle>
-              <CardDescription>Transaction history for all bank accounts</CardDescription>
+              <CardTitle>Accounts</CardTitle>
+              <CardDescription>All financial accounts and their current balances</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Tabs defaultValue={Object.keys(data.bank_statements)[0]} className="space-y-4">
-                <TabsList className="w-full flex flex-wrap">
-                  {Object.entries(data.bank_statements).map(([account, transactions]) => (
-                    <TabsTrigger key={account} value={account} className="flex-1">
-                      {account}
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="outline" className="ml-2">
-                              {transactions.length}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>{transactions.length} transactions</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {Object.entries(data.bank_statements).map(([account, transactions]) => (
-                  <TabsContent key={account} value={account}>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-medium">{account}</h3>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              downloadCsv(transactions as any[], `bank_${account.replace(/\s+/g, "_")}.csv`)
-                            }
-                          >
-                            <FileSpreadsheet className="mr-2 h-4 w-4" />
-                            CSV
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => downloadJson(transactions, `bank_${account.replace(/\s+/g, "_")}.json`)}
-                          >
-                            <FileJson className="mr-2 h-4 w-4" />
-                            JSON
-                          </Button>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Bank Accounts</h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {depositoryAccounts.map((account) => (
+                    <div key={account.account_id} className="rounded-md border p-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <div>
+                          <h4 className="font-medium">{account.name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {account.official_name || account.subtype}
+                            {account.mask && <span> •••• {account.mask}</span>}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="capitalize">
+                          {account.subtype}
+                        </Badge>
+                      </div>
+                      <div className="mt-2">
+                        <div className="text-sm font-medium">Available:</div>
+                        <div className="text-lg font-bold">
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: account.balances.iso_currency_code,
+                          }).format(account.balances.available || 0)}
                         </div>
                       </div>
-
-                      <TransactionTable transactions={transactions as any[]} />
+                      <div className="mt-2">
+                        <div className="text-sm font-medium">Current:</div>
+                        <div className="text-lg font-bold">
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: account.balances.iso_currency_code,
+                          }).format(account.balances.current)}
+                        </div>
+                      </div>
                     </div>
-                  </TabsContent>
-                ))}
-              </Tabs>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Credit Cards</h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {creditAccounts.map((account) => (
+                    <div key={account.account_id} className="rounded-md border p-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <div>
+                          <h4 className="font-medium">{account.name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {account.official_name || account.subtype}
+                            {account.mask && <span> •••• {account.mask}</span>}
+                          </p>
+                        </div>
+                        <Badge variant="outline">Credit Card</Badge>
+                      </div>
+                      <div className="mt-2">
+                        <div className="text-sm font-medium">Balance:</div>
+                        <div className="text-lg font-bold text-red-500">
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: account.balances.iso_currency_code,
+                          }).format(account.balances.current)}
+                        </div>
+                      </div>
+                      {account.balances.limit && (
+                        <div className="mt-2">
+                          <div className="text-sm font-medium">Credit Limit:</div>
+                          <div className="text-lg font-bold">
+                            {new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: account.balances.iso_currency_code,
+                            }).format(account.balances.limit)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="credit">
+        <TabsContent value="transactions">
           <Card>
             <CardHeader>
-              <CardTitle>Credit Card Statements</CardTitle>
-              <CardDescription>Transaction history for all credit cards</CardDescription>
+              <CardTitle>All Transactions</CardTitle>
+              <CardDescription>Transaction history for all accounts</CardDescription>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue={Object.keys(data.credit_statements)[0]} className="space-y-4">
-                <TabsList className="w-full flex flex-wrap">
-                  {Object.entries(data.credit_statements).map(([card, transactions]) => (
-                    <TabsTrigger key={card} value={card} className="flex-1">
-                      {card}
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="outline" className="ml-2">
-                              {transactions.length}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>{transactions.length} transactions</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {Object.entries(data.credit_statements).map(([card, transactions]) => (
-                  <TabsContent key={card} value={card}>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-medium">{card}</h3>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              downloadCsv(transactions as any[], `credit_${card.replace(/\s+/g, "_")}.csv`)
-                            }
-                          >
-                            <FileSpreadsheet className="mr-2 h-4 w-4" />
-                            CSV
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => downloadJson(transactions, `credit_${card.replace(/\s+/g, "_")}.json`)}
-                          >
-                            <FileJson className="mr-2 h-4 w-4" />
-                            JSON
-                          </Button>
-                        </div>
-                      </div>
-
-                      <TransactionTable transactions={transactions as any[]} />
-                    </div>
-                  </TabsContent>
-                ))}
-              </Tabs>
+              <div className="flex justify-end gap-2 mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadCsv(data.added.concat(data.modified), "all_transactions.csv")}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadJson(data.added.concat(data.modified), "all_transactions.json")}
+                >
+                  <FileJson className="mr-2 h-4 w-4" />
+                  JSON
+                </Button>
+              </div>
+              
+              <TransactionTable 
+                transactions={data.added.concat(data.modified)} 
+                accountNames={accountNames}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -275,4 +304,3 @@ export function GeneratedData({ data }: GeneratedDataProps) {
     </div>
   )
 }
-

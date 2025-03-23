@@ -24,20 +24,16 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 
-interface Transaction {
-  date: string
-  description: string
-  amount: number
-  type: string
-  balance: number
-}
+import { Transaction } from "@/types/plaid-types"
 
 interface TransactionTableProps {
   transactions: Transaction[]
+  accountNames?: Record<string, string>
 }
 
-export function TransactionTable({ transactions }: TransactionTableProps) {
+export function TransactionTable({ transactions, accountNames = {} }: TransactionTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "date", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [pageSize, setPageSize] = useState(25)
@@ -56,14 +52,43 @@ export function TransactionTable({ transactions }: TransactionTableProps) {
       cell: ({ row }) => <div>{row.getValue("date")}</div>,
     },
     {
-      accessorKey: "description",
+      accessorKey: "name",
       header: "Description",
-      cell: ({ row }) => <div className="max-w-[300px] truncate">{row.getValue("description")}</div>,
+      cell: ({ row }) => {
+        const transaction = row.original
+        return (
+          <div className="max-w-[300px]">
+            <div className="font-medium truncate">{row.getValue("name")}</div>
+            {transaction.merchant_name && transaction.merchant_name !== row.getValue("name") && (
+              <div className="text-xs text-muted-foreground truncate">{transaction.merchant_name}</div>
+            )}
+          </div>
+        )
+      },
     },
     {
-      accessorKey: "type",
-      header: "Type",
-      cell: ({ row }) => <div>{row.getValue("type")}</div>,
+      accessorKey: "account_id",
+      header: "Account",
+      cell: ({ row }) => {
+        const accountId = row.getValue("account_id") as string
+        const accountName = accountNames[accountId] || accountId.slice(0, 8) + "..."
+        return <div className="whitespace-nowrap">{accountName}</div>
+      },
+    },
+    {
+      accessorKey: "category",
+      header: "Category",
+      cell: ({ row }) => {
+        const categories = row.original.category || []
+        if (categories.length === 0) return null
+        return (
+          <div className="flex flex-wrap gap-1">
+            <Badge variant="outline" className="whitespace-nowrap text-xs">
+              {categories[categories.length - 1]}
+            </Badge>
+          </div>
+        )
+      },
     },
     {
       accessorKey: "amount",
@@ -80,29 +105,17 @@ export function TransactionTable({ transactions }: TransactionTableProps) {
         const formatted = new Intl.NumberFormat("en-US", {
           style: "currency",
           currency: "USD",
-        }).format(amount)
+        }).format(Math.abs(amount))
 
-        return <div className={amount < 0 ? "text-red-500" : "text-green-500"}>{formatted}</div>
+        return <div className={amount > 0 ? "text-red-500" : "text-green-500"}>{formatted}</div>
       },
     },
     {
-      accessorKey: "balance",
-      header: ({ column }) => {
-        return (
-          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            Balance
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        )
-      },
+      accessorKey: "payment_meta.payment_method",
+      header: "Payment Method",
       cell: ({ row }) => {
-        const balance = Number.parseFloat(row.getValue("balance"))
-        const formatted = new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency: "USD",
-        }).format(balance)
-
-        return <div>{formatted}</div>
+        const paymentMethod = row.original.payment_meta?.payment_method
+        return paymentMethod ? <div className="capitalize">{paymentMethod}</div> : null
       },
     },
   ]
@@ -126,49 +139,97 @@ export function TransactionTable({ transactions }: TransactionTableProps) {
     },
   })
 
-  // Get unique transaction types for filtering
-  const uniqueTypes = Array.from(new Set(transactions.map((t) => t.type)))
+  // Get unique categories for filtering
+  const uniqueCategories = Array.from(
+    new Set(
+      transactions.flatMap(t => 
+        t.category?.length ? t.category[t.category.length - 1] : []
+      )
+    )
+  ).filter(Boolean)
+
+  // Get unique payment methods
+  const uniquePaymentMethods = Array.from(
+    new Set(
+      transactions.map(t => t.payment_meta?.payment_method).filter(Boolean)
+    )
+  ) as string[]
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <Input
           placeholder="Filter descriptions..."
-          value={(table.getColumn("description")?.getFilterValue() as string) ?? ""}
-          onChange={(event) => table.getColumn("description")?.setFilterValue(event.target.value)}
+          value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+          onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
           className="max-w-sm"
         />
         <div className="flex flex-wrap items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                Type <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuCheckboxItem
-                checked={!table.getColumn("type")?.getFilterValue()}
-                onCheckedChange={() => table.getColumn("type")?.setFilterValue(undefined)}
-              >
-                All Types
-              </DropdownMenuCheckboxItem>
-              {uniqueTypes.map((type) => (
+          {table.getColumn("category") && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Category <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-[300px] overflow-y-auto">
                 <DropdownMenuCheckboxItem
-                  key={type}
-                  checked={table.getColumn("type")?.getFilterValue() === type}
-                  onCheckedChange={() => {
-                    if (table.getColumn("type")?.getFilterValue() === type) {
-                      table.getColumn("type")?.setFilterValue(undefined)
-                    } else {
-                      table.getColumn("type")?.setFilterValue(type)
-                    }
-                  }}
+                  checked={!table.getColumn("category")?.getFilterValue()}
+                  onCheckedChange={() => table.getColumn("category")?.setFilterValue(undefined)}
                 >
-                  {type}
+                  All Categories
                 </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {uniqueCategories.map((category) => (
+                  <DropdownMenuCheckboxItem
+                    key={category}
+                    checked={table.getColumn("category")?.getFilterValue() === category}
+                    onCheckedChange={() => {
+                      if (table.getColumn("category")?.getFilterValue() === category) {
+                        table.getColumn("category")?.setFilterValue(undefined)
+                      } else {
+                        table.getColumn("category")?.setFilterValue(category)
+                      }
+                    }}
+                  >
+                    {category}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {table.getColumn("payment_meta.payment_method") && uniquePaymentMethods.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Payment Method <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuCheckboxItem
+                  checked={!table.getColumn("payment_meta.payment_method")?.getFilterValue()}
+                  onCheckedChange={() => table.getColumn("payment_meta.payment_method")?.setFilterValue(undefined)}
+                >
+                  All Methods
+                </DropdownMenuCheckboxItem>
+                {uniquePaymentMethods.map((method) => (
+                  <DropdownMenuCheckboxItem
+                    key={method}
+                    checked={table.getColumn("payment_meta.payment_method")?.getFilterValue() === method}
+                    onCheckedChange={() => {
+                      if (table.getColumn("payment_meta.payment_method")?.getFilterValue() === method) {
+                        table.getColumn("payment_meta.payment_method")?.setFilterValue(undefined)
+                      } else {
+                        table.getColumn("payment_meta.payment_method")?.setFilterValue(method)
+                      }
+                    }}
+                  >
+                    <span className="capitalize">{method}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <Select
             value={pageSize.toString()}
@@ -268,4 +329,3 @@ export function TransactionTable({ transactions }: TransactionTableProps) {
     </div>
   )
 }
-
