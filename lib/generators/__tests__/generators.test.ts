@@ -153,7 +153,8 @@ describe("Main Generator", () => {
       request_id: "test_req_123",
       next_cursor: "end",
       has_more: false,
-      transactions_update_status: "full_completion" as const
+      transactions_update_status: "HISTORICAL_UPDATE_COMPLETE" as const,
+      item_id: "item_test123"
     };
     
     const jsonStr = formatDataForDownload(data);

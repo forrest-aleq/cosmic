@@ -74,7 +74,8 @@ export function generateFinancialData(
     next_cursor: "end",
     has_more: false,
     request_id: generateRequestId(),
-    transactions_update_status: "full_completion"
+    transactions_update_status: "HISTORICAL_UPDATE_COMPLETE",
+    item_id: "item_" + Math.random().toString(36).substring(2, 10)
   };
 }
 

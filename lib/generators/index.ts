@@ -7,12 +7,15 @@
 export * from "./company-generator";
 export * from "./account-generator";
 export * from "./config";
+export * from "./main-generator";
+export * from "./transaction-generator";
 
-// Re-export types for convenience
-export { 
+// Directly export the types instead of re-exporting
+// The types exist in the file but aren't being found through re-export
+export type { 
   CompanyProfile,
   Account, 
   Transaction, 
   RemovedTransaction,
   PlaidTransactionsResponse
-} from "@/types/plaid-types";
+} from "../../types/plaid-types";

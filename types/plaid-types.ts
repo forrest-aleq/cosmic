@@ -150,14 +150,49 @@ export interface PaymentMeta {
   /** Reason for the payment */
   reason: string | null;
   /** ID for payee */
-  payee_id: string | null;
+  payee: string | null;
   /** ID for payer */
-  payer_id: string | null;
+  payer: string | null;
+  /** By order of */
+  by_order_of: string | null;
   /** Check number if applicable */
-  check_number: string | null;
-  /** ACH class code if applicable */
-  ach_class: string | null;
+  ppd_id: string | null;
 }
+
+/**
+ * Counterparty information for a transaction
+ */
+export interface Counterparty {
+  /** Name of the counterparty */
+  name: string;
+  /** Type of counterparty (merchant, marketplace) */
+  type: string;
+  /** URL to the counterparty's logo */
+  logo_url: string | null;
+  /** Website of the counterparty */
+  website: string | null;
+  /** Entity ID of the counterparty */
+  entity_id: string;
+  /** Confidence level of the match */
+  confidence_level: "VERY_HIGH" | "HIGH" | "MEDIUM" | "LOW" | "VERY_LOW";
+}
+
+/**
+ * Personal finance category information
+ */
+export interface PersonalFinanceCategory {
+  /** Primary category (e.g., FOOD_AND_DRINK) */
+  primary: string;
+  /** Detailed category (e.g., FOOD_AND_DRINK_FAST_FOOD) */
+  detailed: string;
+  /** Confidence level of the categorization */
+  confidence_level: "VERY_HIGH" | "HIGH" | "MEDIUM" | "LOW" | "VERY_LOW";
+}
+
+/**
+ * Payment channel types
+ */
+export type PaymentChannel = "online" | "in store" | "other";
 
 /**
  * Transaction data structure
@@ -181,16 +216,16 @@ export interface Transaction {
   pending: boolean;
   /** Pending transaction ID that this transaction replaces, if applicable */
   pending_transaction_id: string | null;
-  /** Description of the transaction as provided by the financial institution */
-  original_description: string | null;
-  /** Clean name of the merchant/counterparty */
-  merchant_name: string | null;
   /** Raw description of the transaction from the financial institution */
   name: string;
   /** Date of the transaction, in format "YYYY-MM-DD" */
   date: string;
+  /** ISO 8601 timestamp of the transaction */
+  datetime?: string;
   /** Date when the transaction was authorized, in format "YYYY-MM-DD" */
   authorized_date: string | null;
+  /** ISO 8601 timestamp of when the transaction was authorized */
+  authorized_datetime?: string | null;
   /** Location data for the transaction */
   location: TransactionLocation;
   /** Payment metadata for the transaction */
@@ -199,15 +234,33 @@ export interface Transaction {
   account_owner: string | null;
   /** Transaction code if available */
   transaction_code: string | null;
+  /** Clean name of the merchant/counterparty */
+  merchant_name: string | null;
+  /** Merchant entity ID if available */
+  merchant_entity_id?: string | null;
+  /** URL to the merchant's logo */
+  logo_url?: string | null;
+  /** Website of the merchant */
+  website?: string | null;
+  /** Channel through which the transaction was made */
+  payment_channel?: PaymentChannel;
+  /** Type of transaction (place, digital, etc.) */
+  transaction_type?: string;
+  /** Information about transaction counterparties */
+  counterparties?: Counterparty[];
+  /** Personal finance categorization */
+  personal_finance_category?: PersonalFinanceCategory;
+  /** URL to the personal finance category icon */
+  personal_finance_category_icon_url?: string | null;
 }
 
 /**
  * Minimal transaction data for removed transactions
  */
 export interface RemovedTransaction {
-  /** ID of the transaction that was removed */
+  /** Transaction ID of the removed transaction */
   transaction_id: string;
-  /** ID of the account this transaction belonged to */
+  /** Account ID the transaction belongs to */
   account_id: string;
 }
 
@@ -215,22 +268,24 @@ export interface RemovedTransaction {
  * Plaid Transactions Sync API response format
  */
 export interface PlaidTransactionsResponse {
-  /** List of accounts that had transactions */
+  /** List of accounts */
   accounts: Account[];
-  /** Newly added transactions */
+  /** Added transactions */
   added: Transaction[];
   /** Modified transactions */
   modified: Transaction[];
   /** Removed transactions */
   removed: RemovedTransaction[];
-  /** Cursor for the next page of results */
+  /** Cursor for pagination */
   next_cursor: string;
-  /** Whether there are more results to fetch */
+  /** Whether there are more transactions to fetch */
   has_more: boolean;
-  /** ID of this request (for debugging) */
+  /** Request ID for this API call */
   request_id: string;
-  /** Status of transaction updates */
-  transactions_update_status: "partial_completion" | "full_completion";
+  /** Status of the transaction update */
+  transactions_update_status?: "PARTIAL_COMPLETION" | "FULL_COMPLETION" | "HISTORICAL_UPDATE_COMPLETE"; 
+  /** Optional item_id field */
+  item_id?: string;
 }
 
 /**
@@ -241,14 +296,14 @@ export interface CompanyProfile {
   company_name: string;
   /** Industry the company operates in */
   industry: string;
-  /** Business model (B2B, B2C, etc.) */
+  /** Business model of the company */
   business_model: string;
-  /** Size category of the company */
+  /** Size of the company */
   company_size: string;
   /** When the company was founded */
   founding_date: Date;
-  /** Company location */
+  /** Location of the company headquarters */
   location?: string;
-  /** Annual revenue estimate */
+  /** Annual revenue of the company */
   annual_revenue?: number;
 }

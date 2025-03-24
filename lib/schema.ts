@@ -13,7 +13,9 @@ export const companyProfileSchema = z.object({
   company_name: z
     .string()
     .min(2, { message: "Company name must be at least 2 characters" })
-    .max(100, { message: "Company name must be less than 100 characters" }),
+    .max(100, { message: "Company name must be less than 100 characters" })
+    .optional()
+    .or(z.literal("")),
   
   industry: z
     .enum(INDUSTRIES as [string, ...string[]], {
@@ -42,7 +44,8 @@ export const companyProfileSchema = z.object({
     .string()
     .min(2, { message: "Location must be at least 2 characters" })
     .max(100, { message: "Location must be less than 100 characters" })
-    .optional(),
+    .optional()
+    .or(z.literal("")),
   
   annual_revenue: z
     .number()

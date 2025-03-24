@@ -6,7 +6,7 @@ import { useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { format } from "date-fns"
-import { CalendarIcon, Loader2 } from "lucide-react"
+import { CalendarIcon, Loader2, DownloadIcon, CopyIcon, CheckIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -48,6 +48,7 @@ export function CompanyProfileGenerator() {
     averageTransactionAmount: number;
     transactionsByMonth: Record<string, number>;
   } | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // Create the form using our validated schema
   const form = useForm<FullFormData>({
@@ -80,6 +81,40 @@ export function CompanyProfileGenerator() {
     setDataStats(null)
 
     try {
+      // Generate random company name if blank
+      if (!values.company.company_name || values.company.company_name.trim() === '') {
+        const randomNames = [
+          "Horizon Tech",
+          "Apex Solutions",
+          "Nimbus Systems",
+          "Quantum Dynamics",
+          "Stellar Innovations",
+          "Vertex Holdings",
+          "Cirrus Digital",
+          "Momentum Labs",
+          "Fusion Enterprises",
+          "Prism Technologies",
+        ];
+        values.company.company_name = randomNames[Math.floor(Math.random() * randomNames.length)];
+      }
+      
+      // Ensure location is set if blank
+      if (!values.company.location || values.company.location.trim() === '') {
+        const randomLocations = [
+          "New York, NY",
+          "San Francisco, CA",
+          "Chicago, IL",
+          "Austin, TX",
+          "Boston, MA",
+          "Seattle, WA",
+          "Los Angeles, CA",
+          "Denver, CO",
+          "Atlanta, GA",
+          "Miami, FL",
+        ];
+        values.company.location = randomLocations[Math.floor(Math.random() * randomLocations.length)];
+      }
+
       // Simulate API call delay for UX
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
@@ -176,6 +211,43 @@ export function CompanyProfileGenerator() {
     a.click();
     
     URL.revokeObjectURL(url);
+  }
+
+  // Function to format real data into sample format for display
+  function formatSampleData() {
+    if (!generatedData) return "{}";
+    
+    // Create an exact Plaid-formatted sample based on the actual generated data
+    const sample = {
+      accounts: generatedData.accounts.slice(0, 2),
+      added: generatedData.added.slice(0, 3),
+      modified: generatedData.modified.slice(0, 2),
+      removed: generatedData.removed.slice(0, 1),
+      next_cursor: generatedData.next_cursor || "tVUUL15lYQN5rBnfDIc1I8xudpGdIlw9nsgeXWvhOfkECvUeR663i3Dt1uf/94S8ASkitgLcIiOSqNwzzp+bh89kirazha5vuZHBb2ZA5NtCDkkV",
+      has_more: false,
+      request_id: generatedData.request_id || "Wvhy9PZHQLV8njG",
+      item_id: generatedData.item_id || `item_${Math.random().toString(36).substring(2, 10)}`,
+      transactions_update_status: "HISTORICAL_UPDATE_COMPLETE"
+    };
+    
+    return JSON.stringify(sample, null, 2);
+  }
+
+  function handleCopyToClipboard() {
+    if (!generatedData) return;
+    navigator.clipboard.writeText(formatSampleData())
+      .then(() => {
+        // Show confirmation
+        setCopied(true);
+        
+        // Reset after 2 seconds
+        setTimeout(() => {
+          setCopied(false);
+        }, 2000);
+      })
+      .catch(err => {
+        console.error("Failed to copy JSON: ", err);
+      });
   }
 
   return (
@@ -694,13 +766,92 @@ export function CompanyProfileGenerator() {
             )}
 
             <GeneratedData data={generatedData} />
-            <div className="flex justify-end gap-2 mt-4">
-              <Button onClick={handleCsvDownload} variant="outline">
-                Download CSV
-              </Button>
-              <Button onClick={handleDownload}>
-                Download JSON
-              </Button>
+            
+            <div className="mt-6 mb-2">
+              <h3 className="text-lg font-medium mb-2">Integration Preview</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Preview of the integrated data based on your configuration
+              </p>
+              <div className="border rounded-md">
+                <Tabs defaultValue="json">
+                  <div className="flex items-center border-b">
+                    <TabsList className="bg-transparent p-0 h-9">
+                      <TabsTrigger
+                        value="summary"
+                        className="rounded-none data-[state=active]:shadow-none data-[state=active]:bg-background data-[state=active]:border-b-2 data-[state=active]:border-primary px-4 h-9"
+                      >
+                        Summary
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="excel"
+                        className="rounded-none data-[state=active]:shadow-none data-[state=active]:bg-background data-[state=active]:border-b-2 data-[state=active]:border-primary px-4 h-9"
+                      >
+                        Excel
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="json"
+                        className="rounded-none data-[state=active]:shadow-none data-[state=active]:bg-background data-[state=active]:border-b-2 data-[state=active]:border-primary px-4 h-9 font-medium"
+                      >
+                        JSON
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="sql"
+                        className="rounded-none data-[state=active]:shadow-none data-[state=active]:bg-background data-[state=active]:border-b-2 data-[state=active]:border-primary px-4 h-9"
+                      >
+                        SQL
+                      </TabsTrigger>
+                    </TabsList>
+                    <div className="ml-auto mr-2 flex items-center space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-primary hover:text-primary hover:bg-muted h-7 w-7 my-1"
+                        onClick={() => handleCopyToClipboard()}
+                        title="Copy to clipboard"
+                      >
+                        {copied ? (
+                          <CheckIcon className="h-4 w-4" />
+                        ) : (
+                          <CopyIcon className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-primary hover:text-primary hover:bg-muted h-7 w-7 my-1"
+                        onClick={() => handleDownload()}
+                        title="Download JSON"
+                      >
+                        <DownloadIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <TabsContent value="summary" className="p-0 m-0">
+                    <div className="p-4 text-sm h-[400px] overflow-auto bg-background text-foreground">
+                      <p>Summary view of the generated data will be displayed here.</p>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="excel" className="p-0 m-0">
+                    <div className="p-4 text-sm h-[400px] overflow-auto bg-background text-foreground">
+                      <p>Excel format preview will be displayed here.</p>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="json" className="p-0 m-0">
+                    <pre className="p-4 overflow-auto text-xs h-[400px] bg-background text-foreground m-0 rounded-none">
+                      <code>{formatSampleData()}</code>
+                    </pre>
+                  </TabsContent>
+                  
+                  <TabsContent value="sql" className="p-0 m-0">
+                    <div className="p-4 text-sm h-[400px] overflow-auto bg-background text-foreground">
+                      <p>SQL format preview will be displayed here.</p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
             </div>
           </>
         )}
